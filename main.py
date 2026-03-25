@@ -90,6 +90,9 @@ def get_metrics():
         busy_all = len(df_all_station[df_all_station['Status'].isin(occupied_statuses)])
         daily_avg = (busy_all / total_all) * 100 if total_all > 0 else 0
         
+        # Média em horas (baseado em um dia de 24h)
+        avg_hours = (daily_avg * 24) / 100
+        
         # Status atual (última linha do CSV para este ID)
         current_status = df_all_station.iloc[-1]['Status'] if not df_all_station.empty else "Unknown"
         
@@ -98,6 +101,7 @@ def get_metrics():
             "status": current_status,
             "occupancy_24h": round(occupancy, 1),
             "daily_avg": round(daily_avg, 1),
+            "avg_hours": round(avg_hours, 1),
             "total_checks": total_checks
         }
         
@@ -128,6 +132,10 @@ def generate_dashboard(metrics):
                 <div class="metric-item">
                     <span class="label">Média Diária</span>
                     <span class="value">{data['daily_avg']}%</span>
+                </div>
+                <div class="metric-item">
+                    <span class="label">Média Horas/Dia</span>
+                    <span class="value">{data['avg_hours']}h</span>
                 </div>
             </div>
             <div class="progress-bar-container">
