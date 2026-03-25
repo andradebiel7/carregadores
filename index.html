@@ -1,0 +1,244 @@
+
+    <!DOCTYPE html>
+    <html lang="pt-br">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Dashboard Tupi - Real Time</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            :root {
+                --bg-color: #0f172a;
+                --card-bg: rgba(30, 41, 59, 0.7);
+                --text-primary: #f8fafc;
+                --text-secondary: #94a3b8;
+                --accent-green: #22c55e;
+                --accent-red: #ef4444;
+                --accent-blue: #3b82f6;
+            }
+            body {
+                font-family: 'Inter', sans-serif;
+                background-color: var(--bg-color);
+                color: var(--text-primary);
+                margin: 0;
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-height: 100vh;
+            }
+            .header {
+                text-align: center;
+                margin-bottom: 40px;
+            }
+            .header h1 {
+                font-size: 2.5rem;
+                margin-bottom: 10px;
+                background: linear-gradient(to right, #60a5fa, #a855f7);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            .header p {
+                color: var(--text-secondary);
+                font-size: 1rem;
+            }
+            .dashboard-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                width: 100%;
+                max-width: 1200px;
+            }
+            .card {
+                background: var(--card-bg);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 16px;
+                padding: 24px;
+                transition: transform 0.2s, box-shadow 0.2s;
+            }
+            .card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            }
+            .card-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 20px;
+            }
+            .card-header h3 {
+                margin: 0;
+                font-size: 1.1rem;
+                max-width: 70%;
+            }
+            .status-badge {
+                padding: 6px 12px;
+                border-radius: 20px;
+                font-size: 0.75rem;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+            .status-available { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
+            .status-busy { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border: 1px solid var(--accent-red); }
+            .status-unknown { background: rgba(148, 163, 184, 0.2); color: var(--text-secondary); border: 1px solid var(--text-secondary); }
+            
+            .metrics {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 15px;
+                margin-bottom: 20px;
+            }
+            .metric-item {
+                display: flex;
+                flex-direction: column;
+            }
+            .metric-item .label {
+                font-size: 0.8rem;
+                color: var(--text-secondary);
+                margin-bottom: 5px;
+            }
+            .metric-item .value {
+                font-size: 1.4rem;
+                font-weight: 700;
+            }
+            .progress-bar-container {
+                background: #334155;
+                height: 8px;
+                border-radius: 4px;
+                overflow: hidden;
+            }
+            .progress-bar {
+                background: linear-gradient(to right, #3b82f6, #60a5fa);
+                height: 100%;
+                border-radius: 4px;
+            }
+            .footer {
+                margin-top: 50px;
+                color: var(--text-secondary);
+                font-size: 0.8rem;
+                text-align: center;
+            }
+            @media (max-width: 600px) {
+                .dashboard-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Tupi Real-Time Dashboard</h1>
+            <p>Última atualização: 25/03/2026 12:16:29</p>
+        </div>
+        
+        <div class="dashboard-grid">
+            
+        <div class="card">
+            <div class="card-header">
+                <h3>EletroBidu - CCO WEG DC</h3>
+                <span class="status-badge status-available">Disponível</span>
+            </div>
+            <div class="metrics">
+                <div class="metric-item">
+                    <span class="label">Ocupação (24h)</span>
+                    <span class="value">0.0%</span>
+                </div>
+                <div class="metric-item">
+                    <span class="label">Média Diária</span>
+                    <span class="value">0.0%</span>
+                </div>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: 0.0%"></div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h3>EletroBidu - CCO MOBY</h3>
+                <span class="status-badge status-available">Disponível</span>
+            </div>
+            <div class="metrics">
+                <div class="metric-item">
+                    <span class="label">Ocupação (24h)</span>
+                    <span class="value">0.0%</span>
+                </div>
+                <div class="metric-item">
+                    <span class="label">Média Diária</span>
+                    <span class="value">0.0%</span>
+                </div>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: 0.0%"></div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h3>EletroBidu - CCO Zeta Uno</h3>
+                <span class="status-badge status-available">Disponível</span>
+            </div>
+            <div class="metrics">
+                <div class="metric-item">
+                    <span class="label">Ocupação (24h)</span>
+                    <span class="value">0.0%</span>
+                </div>
+                <div class="metric-item">
+                    <span class="label">Média Diária</span>
+                    <span class="value">0.0%</span>
+                </div>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: 0.0%"></div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h3>EletroBidu - Posto Equipe Shopping</h3>
+                <span class="status-badge status-available">Disponível</span>
+            </div>
+            <div class="metrics">
+                <div class="metric-item">
+                    <span class="label">Ocupação (24h)</span>
+                    <span class="value">0.0%</span>
+                </div>
+                <div class="metric-item">
+                    <span class="label">Média Diária</span>
+                    <span class="value">0.0%</span>
+                </div>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: 0.0%"></div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h3>Posto Quality</h3>
+                <span class="status-badge status-available">Disponível</span>
+            </div>
+            <div class="metrics">
+                <div class="metric-item">
+                    <span class="label">Ocupação (24h)</span>
+                    <span class="value">0.0%</span>
+                </div>
+                <div class="metric-item">
+                    <span class="label">Média Diária</span>
+                    <span class="value">0.0%</span>
+                </div>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: 0.0%"></div>
+            </div>
+        </div>
+        
+        </div>
+        
+        <div class="footer">
+            <p>Sistema Autônomo de Monitoramento &copy; 2026</p>
+        </div>
+    </body>
+    </html>
+    
