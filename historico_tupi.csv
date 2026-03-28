@@ -405,3 +405,8 @@ ID_Ponto,Nome,Status,Data,Hora
 67408530fd34cf001fbd6c63,EletroBidu - CCO Zeta Uno,Available,2026-03-28,16:38:16
 6890bcc16899c6001f414dc8,Posto Quality,Available,2026-03-28,16:38:16
 69173cb53bad44001fc83d83,EletroBidu - CCO WEG DC,Available,2026-03-28,16:38:16
+670eb3214acdfd001f675a13,EletroBidu - Posto Equipe Shopping,Charging,2026-03-28,16:59:23
+66a25ea61060d800227bc0e3,EletroBidu - CCO MOBY,Available,2026-03-28,16:59:23
+67408530fd34cf001fbd6c63,EletroBidu - CCO Zeta Uno,Available,2026-03-28,16:59:23
+6890bcc16899c6001f414dc8,Posto Quality,Available,2026-03-28,16:59:23
+69173cb53bad44001fc83d83,EletroBidu - CCO WEG DC,Charging,2026-03-28,16:59:23
