@@ -1,264 +1,1265 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kotta | Tupi Monitoramento Nacional</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,600;0,700;1,800;1,900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --bg-color: #020617; /* Even darker for Kotta contrast */
+            --card-bg: rgba(15, 23, 42, 0.85);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --accent-blue: #0ea5e9; /* Sky blue matching Kotta Logo */
+            --accent-purple: #a855f7;
+            --sidebar-width: 380px;
+        }
+        body, html { margin:0; padding:0; height:100vh; overflow:hidden; font-family:'Montserrat', sans-serif; background: var(--bg-color); color: var(--text-primary); }
+        .nav-bar { display:flex; background:#0b1120; border-bottom:1px solid rgba(255,255,255,0.1); padding:0 20px; justify-content:space-between; align-items:center; height:50px; }
+        .nav-tabs { display:flex; gap:30px; }
+        .tab-btn { padding:15px 0; border:none; background:none; color:var(--text-secondary); cursor:pointer; font-size:0.85rem; font-weight:600; border-bottom:2px solid transparent; transition:all 0.2s; }
+        .tab-btn.active { color:var(--accent-blue); border-bottom-color:var(--accent-blue); }
+        main { display:flex; height:calc(100vh - 50px); position:relative; }
+        .view { display:none; flex:1; width:100%; }
+        .view.active { display:flex; }
+        #map { flex:1; background:#0b1120; z-index:1; }
+        .side-panel { width:var(--sidebar-width); border-left:1px solid rgba(255,255,255,0.1); background:var(--bg-color); padding:20px; overflow-y:auto; z-index:1000; }
+        .dashboard-view { flex:1; background:#0b1120; padding:20px 40px; flex-direction:column; overflow-y:auto; align-items:center; }
+        .dashboard-container { max-width: 1200px; width:100%; }
+        .st-grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:20px; margin-bottom:30px; }
+        .st-card { background:var(--card-bg); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .st-card .label { font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:1px; }
+        .st-card .val { font-size:1.5rem; font-weight:700; margin-top:5px; color:#fff; display:block; }
+        .card { background:var(--card-bg); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; margin-bottom:15px; }
+        .badge { padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:700; text-transform:uppercase; }
+        .badge-green { background:rgba(34,197,94,0.1); color:var(--accent-green); border:1px solid var(--accent-green); }
+        .badge-red { background:rgba(239,68,68,0.1); color:var(--accent-red); border:1px solid var(--accent-red); }
+        .badge-yellow { background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid #f59e0b; animation: badge-pulse 2s ease-in-out infinite; }
+        .badge-gray { background:rgba(148,163,184,0.1); color:#94a3b8; border:1px solid #94a3b8; }
+        @keyframes badge-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .calc-ui { border-top:1px solid rgba(255,255,255,0.1); padding-top:15px; margin-top:15px; }
+        .calc-row { display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:8px; }
+        .calc-row span:last-child { font-weight:700; }
+        table { width:100%; border-collapse:collapse; background:var(--card-bg); border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); }
+        th { text-align:left; padding:12px 15px; font-size:0.75rem; color:var(--text-secondary); background:rgba(0,0,0,0.2); }
+        td { padding:12px 15px; font-size:0.85rem; border-bottom:1px solid rgba(255,255,255,0.05); }
+        tr:hover { background:rgba(255,255,255,0.02); cursor:pointer; }
+        .filter-bar { display:flex; gap:15px; background:rgba(255,255,255,0.03); padding:15px; border-radius:12px; margin-bottom:20px; border:1px solid rgba(255,255,255,0.05); align-items:center; flex-wrap:wrap; }
+        select.custom-sel, input.custom-date { background:rgba(30,41,59,0.8); color:white; border:1px solid rgba(255,255,255,0.1); padding:8px 12px; border-radius:8px; font-size:0.8rem; outline:none; }
+        .btn-apply { background:var(--accent-blue); color:white; border:none; padding:8px 15px; border-radius:8px; font-size:0.8rem; font-weight:700; cursor:pointer; }
+        .btn-apply:hover { opacity:0.9; }
+        #loading { position:fixed; top:0; left:0; right:0; bottom:0; background:var(--bg-color); z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        .spinner { width:30px; height:30px; border:3px solid rgba(255,255,255,0.1); border-top:3px solid var(--accent-blue); border-radius:50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        /* Excel-like Sorting Styles */
+        th.sortable { cursor:pointer; position:relative; padding-right:25px; user-select:none; transition: background 0.2s; }
+        th.sortable:hover { background: rgba(255,255,255,0.1); }
+        th.sortable::after { content: '↕'; position:absolute; right:8px; color:var(--text-secondary); opacity:0.3; font-size: 0.6rem; }
+        th.sortable.asc::after { content: '↑'; opacity:1; color:var(--accent-blue); }
+        th.sortable.desc::after { content: '↓'; opacity:1; color:var(--accent-blue); }
 
-    <!DOCTYPE html>
-    <html lang="pt-br">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Dashboard Tupi - Real Time</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-        <style>
-            :root {
-                --bg-color: #0f172a;
-                --card-bg: rgba(30, 41, 59, 0.7);
-                --text-primary: #f8fafc;
-                --text-secondary: #94a3b8;
-                --accent-green: #22c55e;
-                --accent-red: #ef4444;
-                --accent-blue: #3b82f6;
-            }
-            body {
-                font-family: 'Inter', sans-serif;
-                background-color: var(--bg-color);
-                color: var(--text-primary);
-                margin: 0;
-                padding: 20px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                min-height: 100vh;
-            }
-            .header {
-                text-align: center;
-                margin-bottom: 40px;
-            }
-            .header h1 {
-                font-size: 2.5rem;
-                margin-bottom: 10px;
-                background: linear-gradient(to right, #60a5fa, #a855f7);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-            }
-            .header p {
-                color: var(--text-secondary);
-                font-size: 1rem;
-            }
-            .dashboard-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 20px;
-                width: 100%;
-                max-width: 1200px;
-            }
-            .card {
-                background: var(--card-bg);
-                backdrop-filter: blur(10px);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 16px;
-                padding: 24px;
-                transition: transform 0.2s, box-shadow 0.2s;
-            }
-            .card:hover {
-                transform: translateY(-5px);
-                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-            }
-            .card-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 20px;
-            }
-            .card-header h3 {
-                margin: 0;
-                font-size: 1.1rem;
-                max-width: 70%;
-            }
-            .status-badge {
-                padding: 6px 12px;
-                border-radius: 20px;
-                font-size: 0.75rem;
-                font-weight: 700;
-                text-transform: uppercase;
-            }
-            .status-available { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
-            .status-busy { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border: 1px solid var(--accent-red); }
-            .status-unknown { background: rgba(148, 163, 184, 0.2); color: var(--text-secondary); border: 1px solid var(--text-secondary); }
+        /* Login Screen */
+        #login-screen { position: fixed; inset: 0; background: var(--bg-color); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(10px); transition: opacity 0.4s ease; }
+        .login-box { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); width: 320px; text-align: center; }
+        .login-box h1 { margin: 0 0 10px 0; font-size: 1.5rem; color: #fff; letter-spacing: 1px; }
+        .login-box p { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 30px; }
+        .login-input { width: 100%; box-sizing: border-box; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); color: white; padding: 12px 15px; border-radius: 8px; outline: none; transition: border-color 0.3s; margin-bottom: 20px; font-size: 1rem; text-align: center; letter-spacing: 2px;}
+        .login-input:focus { border-color: var(--accent-blue); }
+        .login-btn { width: 100%; background: var(--accent-blue); color: white; border: none; padding: 12px; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.3s; }
+        .login-btn:hover { background: #2563eb; }
+        .login-error { color: var(--accent-red); font-size: 0.8rem; margin-top: 15px; display: none; }
+    </style>
+</head>
+<body>
+    <div id="login-screen">
+        <div class="login-box">
+            <img src="logo.png" alt="Kotta Logo" style="max-width: 180px; margin-bottom: 20px;">
+            <h1 style="font-weight: 900; font-style: italic;">KOTTA INTELLIGENCE</h1>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 5px;">Acesso Restrito do Painel</p>
+            <p style="color: var(--accent-green); font-size: 0.70rem; margin-top: 0; margin-bottom: 30px;">Dados disponíveis a partir de 25/03/2026</p>
+            <input type="password" id="login-pwd" class="login-input" placeholder="••••••••" onkeypress="if(event.key === 'Enter') attemptLogin()">
+            <button class="login-btn" onclick="attemptLogin()" id="btn-login-submit">ACESSAR</button>
+            <div id="login-error" class="login-error">Senha Incorreta</div>
+        </div>
+    </div>
+    
+    <div id="loading" style="display:none;"><div class="spinner"></div><p id="loading-txt" style="margin-top:15px; color:var(--text-secondary)">Carregando Inteligência Nacional...</p></div>
+    <nav class="nav-bar">
+        <div class="nav-tabs">
+            <img src="logo.png" alt="Kotta Logo" style="height: 48px; margin-right: 18px; vertical-align: middle;">
+            <button class="tab-btn active" onclick="switchTab('map')">MAPA INTERATIVO</button>
+            <button class="tab-btn" onclick="switchTab('dashboard')">ESTATÍSTICAS & ROI</button>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-secondary); font-weight:700; font-style: italic;" id="global-status-label">Kotta National Network</div>
+    </nav>
+    <main>
+        <div id="view-map" class="view active">
+            <div id="map"></div>
+            <div class="side-panel">
+                <input type="text" id="geo-search" placeholder="📍 Buscar Cidade ou ID da Estação..." style="width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:10px; border-radius:8px; margin-bottom:15px; outline:none;">
+                <div id="map-status-summary" style="margin-bottom:15px;"></div>
+                <div id="station-detail"><p style="text-align:center; margin-top:100px; color:var(--text-secondary); font-size:0.85rem">Selecione um ponto no mapa.</p></div>
+                <div style="margin-top:30px; font-size:0.65rem; color:var(--accent-blue); font-weight:700; text-transform:uppercase; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px">Monitoramento VIP Mogi</div>
+                <div id="vip-list"></div>
+            </div>
+        </div>
+        <div id="view-dashboard" class="view dashboard-view">
+            <div class="dashboard-container">
+                <div class="filter-bar">
+                    <span style="font-size:0.75rem; font-weight:700; color:var(--text-secondary)">FILTRAR POR:</span>
+                    <select id="dash-uf-filter" class="custom-sel" onchange="syncCityFilter(); renderDashboardTable(false, true)">
+                        <option value="">Brasil (Todos)</option>
+                    </select>
+                    <select id="dash-city-filter" class="custom-sel" onchange="renderDashboardTable(false, true)">
+                        <option value="">Todas as Cidades</option>
+                    </select>
+                    
+                    <button onclick="openExclusionModal()" title="Ocultar estações da lista" style="background:#334155; color:#fff; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.85rem; display:flex; align-items:center; gap:5px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                        Ocultar Estações
+                    </button>
+
+                    <button onclick="toggleSmartFilter()" style="background:var(--accent-blue); color:#fff; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.85rem; display:flex; align-items:center; gap:5px; font-weight:700;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                        Filtros de Inteligência
+                    </button>
+
+                    <div style="margin-left:auto; display:flex; gap:10px; align-items:center">
+                        <span style="font-size:0.75rem; font-weight:700; color:var(--text-secondary)">CALENDÁRIO:</span>
+                        <input type="date" id="dash-start-date" class="custom-date" min="2026-03-25" onchange="renderDashboardTable(true)">
+                        <input type="date" id="dash-end-date" class="custom-date" min="2026-03-25" onchange="renderDashboardTable(true)">
+                    </div>
+                </div>
+
+                <!-- Painel de Filtros Inteligentes -->
+                <div id="smart-filter-panel" style="display:none; background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:15px; margin-bottom:20px; backdrop-filter:blur(10px);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <span style="font-size:0.8rem; font-weight:700; color:var(--accent-blue)">⚡ CONSTRUTOR DE REGRAS</span>
+                        <div style="display:flex; gap:10px;">
+                            <button onclick="addFilterRule()" style="background:rgba(255,255,255,0.05); color:white; border:1px solid rgba(255,255,255,0.1); padding:4px 10px; border-radius:6px; cursor:pointer; font-size:0.75rem;">+ Adicionar Regra</button>
+                            <button onclick="clearSmartFilters()" style="background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); padding:4px 10px; border-radius:6px; cursor:pointer; font-size:0.75rem;">Limpar Tudo</button>
+                        </div>
+                    </div>
+                    <div id="filter-rules-container" style="display:flex; flex-direction:column; gap:8px;">
+                        <!-- Regras inseridas aqui via JS -->
+                    </div>
+                    <div id="no-filters-msg" style="text-align:center; padding:10px; color:var(--text-secondary); font-size:0.75rem;">Nenhum filtro ativo. Adicione uma regra para começar.</div>
+                </div>
+
+                <div class="st-grid">
+                    <div class="st-card"><span class="label">Fat. Período Selecionado</span><span class="val" id="total-revenue">R$ 0,00</span></div>
+                    <div class="st-card"><span class="label">Uso Médio Rede</span><span class="val" id="peak-occ">0h 00m</span></div>
+                    <div class="st-card"><span class="label">Total Estações Ativas</span><span class="val" id="total-stations">0</span></div>
+                    <div class="st-card" style="border-right:3px solid var(--accent-green);"><span class="label">Custo Médio Energia</span><span class="val" id="avg-cost">R$ 0,00</span></div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom:30px;">
+                    <!-- Gráfico de Uso por Hora (Picos) -->
+                    <div class="card" style="margin-bottom:0; height:250px; position:relative;">
+                        <div style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); margin-bottom:10px;">Ocupação Média por Hora (Picos 24h)</div>
+                        <canvas id="hourlyChart"></canvas>
+                    </div>
+
+                    <!-- Gráfico Top 5 Estações -->
+                    <div class="card" style="margin-bottom:0; height:250px; position:relative; display:flex; flex-direction:column; align-items:center;">
+                        <div style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); margin-bottom:10px; width: 100%;">Top 5 Faturamento (Período)</div>
+                        <div style="flex:1; width:100%; display:flex; justify-content:center;"><canvas id="topStationChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom:30px; height:250px; position:relative;">
+                    <div style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); margin-bottom:10px;">Evolução de Faturamento Diário</div>
+                    <canvas id="dailyRevenueChart"></canvas>
+                </div>
+
+                <div class="card" style="margin-bottom:30px;">
+                    <div style="font-size:0.75rem; font-weight:700; color:var(--accent-blue); margin-bottom:10px; text-transform:uppercase;">Resumo por Potência (Período Selecionado)</div>
+                    <table style="width: 100%; border:none; margin-bottom:0;">
+                        <thead>
+                            <tr>
+                                <th style="background:rgba(0,0,0,0.3)">Potência (kW)</th>
+                                <th style="background:rgba(0,0,0,0.3)">Qtd. Carregadores</th>
+                                <th style="background:rgba(0,0,0,0.3)">Uso Médio (h/dia)</th>
+                                <th style="background:rgba(0,0,0,0.3)">Faturamento Médio Diário (R$)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="power-summary-body"></tbody>
+                    </table>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="sortable" id="sort-nome" onclick="sortBy('nome')">Posto</th>
+                            <th class="sortable" id="sort-cidade" onclick="sortBy('cidade')">Cidade</th>
+                            <th class="sortable" id="sort-power" onclick="sortBy('power')">Potência</th>
+                            <th class="sortable" id="sort-tarifa_custo" onclick="sortBy('tarifa_custo')">Custo kWh</th>
+                            <th class="sortable" id="sort-tarifa_venda" onclick="sortBy('tarifa_venda')">Venda kWh</th>
+                            <th class="sortable" id="sort-busy_7d" onclick="sortBy('busy_7d')">Média 7d</th>
+                            <th class="sortable" id="sort-busy_30d" onclick="sortBy('busy_30d')">Média 30d</th>
+                            <th class="sortable" id="sort-range_busy" onclick="sortBy('range_busy')">Uso Período</th>
+                            <th class="sortable" id="sort-avg_per_day" onclick="sortBy('avg_per_day')">Média/dia</th>
+                            <th class="sortable" id="sort-f_range" onclick="sortBy('f_range')">Fat. Período</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dash-table-body"></tbody>
+                </table>
+            </div>
+            </div>
+        </div>
+        
+        <!-- Modal Exclusion -->
+        <div id="exclusion-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:10000; align-items:center; justify-content:center;">
+            <div style="background:var(--surface); width:400px; max-width:90%; border-radius:12px; padding:20px; border:1px solid var(--border-light); max-height:80vh; display:flex; flex-direction:column;">
+                <h3 style="margin-top:0; color:var(--text-primary); font-size:1.1rem;">Ocultar Estações</h3>
+                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:15px;">Desmarque as estações que deseja remover temporariamente dos cálculos e gráficos.</p>
+                <div id="exclusion-list" style="flex:1; overflow-y:auto; margin-bottom:15px; border-top:1px solid var(--border-light); padding-top:10px; font-size:0.9rem;">
+                    <!-- Filled via JS -->
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:10px;">
+                    <button onclick="document.getElementById('exclusion-modal').style.display='none'" style="background:#334155; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">Fechar</button>
+                    <button onclick="applyExclusions()" style="background:var(--accent-blue); color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:bold;">Aplicar Filtro</button>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const SB_URL = 'https://mjybzkkwhmxxkhwbpliz.supabase.co';
+        
+        // Chave Criptografada (SB_KEY). Gerada via AES-GCM com a senha.
+        const ENCRYPTED_CREDENTIALS = {
+            "iv": "lZRjUipBjOXNnC0i",
+            "ciphertext": "I3Lm4VsZzD44VvqDfGAeZd1O6DGwCqn1Tgo+OPXPfQjIYZCTISn2uJs7bz3oCHs0/kK4/Icoc5C3pI12JM6/hgO86dCSpXE3747XAQlmUL6khSFW4MlfLJOnMB6sB4ppkHRByv+N9ENRz25cScQXLsUIt8YN/XvJJ5xGDmzXuepj0nmXwwGGxQ5p6vQdZRXsmn9yTfdmPqOX26zKLSl1oZGeu/yKsKBo/s/QVXtt321qmFEr0x1R5PvH++6k3HNAf0lkvMR2/g5gR3KMfv6kXZQT8IZ61pw3MyjI5vfHWBQ="
+        };
+
+        const VIP_IDS = ["69173cb53bad44001fc83d83","66a25ea61060d800227bc0e3","67408530fd34cf001fbd6c63","670eb3214acdfd001f675a13","6890bcc16899c6001f414dc8"];
+        let sb, map, markersLayer, allStats = [];
+        let currentSort = { key: 'range_busy', dir: 'desc' };
+        let SB_KEY_DECRYPTED = null;
+        let smartFilters = []; // Array de objetos { col, op, val }
+        
+        // Função para ignorar período sem dados nos cálculos de média
+        function getEffectiveDays(date1, date2) {
+            if (!date1 || !date2) return 1;
             
-            .metrics {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 15px;
-                margin-bottom: 20px;
+            const d1 = date1 instanceof Date ? date1 : new Date(date1 + "T00:00:00");
+            const d2 = date2 instanceof Date ? date2 : new Date(date2 + "T00:00:00");
+            
+            const sDate = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate());
+            const eDate = new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
+            
+            const missStart = new Date(2026, 4, 4); // 04/05/2026
+            const missEnd = new Date(2026, 4, 10);  // 10/05/2026
+            
+            const overlapStart = sDate > missStart ? sDate : missStart;
+            const overlapEnd = eDate < missEnd ? eDate : missEnd;
+            
+            let originalDays = Math.round((eDate - sDate) / 86400000) + 1;
+            
+            if (overlapStart <= overlapEnd) {
+                const overlapDays = Math.round((overlapEnd - overlapStart) / 86400000) + 1;
+                let effective = originalDays - overlapDays;
+                return effective > 0 ? effective : 1;
             }
-            .metric-item {
-                display: flex;
-                flex-direction: column;
+            return originalDays > 0 ? originalDays : 1;
+        }
+
+        // Utilitários de Criptografia Base64 -> ArrayBuffer
+        function base64ToArrayBuffer(base64) {
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
             }
-            .metric-item .label {
-                font-size: 0.8rem;
-                color: var(--text-secondary);
-                margin-bottom: 5px;
+            return bytes.buffer;
+        }
+
+        async function attemptLogin() {
+            const pwdInput = document.getElementById('login-pwd');
+            const pwd = pwdInput.value;
+            const btn = document.getElementById('btn-login-submit');
+            const err = document.getElementById('login-error');
+            
+            if(!pwd) return;
+            
+            btn.innerText = "VERIFICANDO...";
+            btn.disabled = true;
+            err.style.display = 'none';
+
+            try {
+                const encoder = new TextEncoder();
+                const passBuffer = encoder.encode(pwd);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', passBuffer);
+                
+                const cryptoKey = await crypto.subtle.importKey(
+                    'raw',
+                    hashBuffer,
+                    { name: 'AES-GCM' },
+                    false,
+                    ['decrypt']
+                );
+
+                const ivBuffer = base64ToArrayBuffer(ENCRYPTED_CREDENTIALS.iv);
+                const ciphertextBuffer = base64ToArrayBuffer(ENCRYPTED_CREDENTIALS.ciphertext);
+                
+                const decryptedBuffer = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: ivBuffer },
+                    cryptoKey,
+                    ciphertextBuffer
+                );
+
+                const decoder = new TextDecoder();
+                SB_KEY_DECRYPTED = decoder.decode(decryptedBuffer);
+
+                // Sucesso: Salvar sessão e iniciar
+                localStorage.setItem('kotta_sb_key', SB_KEY_DECRYPTED);
+                document.getElementById('login-screen').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('login-screen').style.display = 'none';
+                    init();
+                }, 400);
+
+            } catch(e) {
+                console.error("Senha incorreta ou erro criptográfico");
+                err.style.display = 'block';
+                btn.innerText = "ACESSAR";
+                btn.disabled = false;
+                pwdInput.value = '';
+                pwdInput.focus();
             }
-            .metric-item .value {
-                font-size: 1.4rem;
-                font-weight: 700;
-            }
-            .progress-bar-container {
-                background: #334155;
-                height: 8px;
-                border-radius: 4px;
-                overflow: hidden;
-            }
-            .progress-bar {
-                background: linear-gradient(to right, #3b82f6, #60a5fa);
-                height: 100%;
-                border-radius: 4px;
-            }
-            .footer {
-                margin-top: 50px;
-                color: var(--text-secondary);
-                font-size: 0.8rem;
-                text-align: center;
-            }
-            @media (max-width: 600px) {
-                .dashboard-grid {
-                    grid-template-columns: 1fr;
+        }
+
+        async function fetchWithRetry(fn, retries = 3, delay = 2000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const result = await fn();
+                    if (result.error) throw new Error(result.error.message || 'RPC Error');
+                    return result;
+                } catch(e) {
+                    console.warn(`Tentativa ${i+1}/${retries} falhou:`, e.message);
+                    if (i < retries - 1) {
+                        document.getElementById('loading-txt').innerText = `Reconectando... (tentativa ${i+2}/${retries})`;
+                        await new Promise(r => setTimeout(r, delay * (i + 1)));
+                    } else {
+                        throw e;
+                    }
                 }
             }
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>Tupi Real-Time Dashboard</h1>
-            <p>Última atualização: 14/05/2026 17:50:41</p>
-        </div>
-        
-        <div class="dashboard-grid">
+        }
+
+        async function loadStats(startDate, endDate, uf, city) {
+            const params = {};
+            if (startDate) params.p_start_date = startDate;
+            if (endDate) params.p_end_date = endDate;
+            if (uf) params.p_uf = uf;
+            if (city) params.p_cidade = city;
             
-        <div class="card">
-            <div class="card-header">
-                <h3>EletroBidu - CCO WEG DC</h3>
-                <span class="status-badge status-busy">Em Uso</span>
-            </div>
-            <div class="metrics">
-                <div class="metric-item">
-                    <span class="label">Ocupação (24h)</span>
-                    <span class="value">40.0%</span>
-                </div>
-                <div class="metric-item">
-                    <span class="label">Média Diária</span>
-                    <span class="value">26.6%</span>
-                </div>
-                <div class="metric-item">
-                    <span class="label">Média Horas/Dia</span>
-                    <span class="value">6.4h</span>
-                </div>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" style="width: 26.6%"></div>
-            </div>
-        </div>
+            try {
+                // Se estivermos filtrando por cidade/estado, um chunk é suficiente.
+                // Se for "Brasil (Todos)", carregamos 2 chunks para garantir volume.
+                if (uf || city) {
+                    const res = await sb.rpc('get_financial_stats_v3', params).range(0, 999);
+                    if (res.error) throw res.error;
+                    return (res.data || []).map(processStation);
+                } else {
+                    // O banco de dados agora está otimizado (500ms). Podemos carregar todas as estações (até 4000)
+                    // Modificado para sequencial para evitar lock de pool do Postgres e timeouts
+                    const r1 = await sb.rpc('get_financial_stats_v3', params).range(0, 999);
+                    const r2 = await sb.rpc('get_financial_stats_v3', params).range(1000, 1999);
+                    const r3 = await sb.rpc('get_financial_stats_v3', params).range(2000, 2999);
+                    const r4 = await sb.rpc('get_financial_stats_v3', params).range(3000, 3999);
+                    
+                    if (r1.error) throw r1.error;
+                    
+                    const raw = [
+                        ...(r1.data || []), 
+                        ...(r2.data || []), 
+                        ...(r3.data || []), 
+                        ...(r4.data || [])
+                    ];
+                    
+                    return raw.map(processStation);
+                }
+            } catch(e) {
+                console.error("Error loading stats:", e);
+                return [];
+            }
+        }
+
+        function processStation(s) {
+            return {
+                ...s,
+                tarifa_venda: Number(s.tarifa_venda || 0),
+                power: Number(s.power || 60),
+                lat: Number(s.lat || 0),
+                lng: Number(s.lng || 0),
+                range_busy: Number(s.range_busy || 0),
+                busy_7d: Number(s.busy_7d || 0),
+                busy_30d: Number(s.busy_30d || 0),
+                range_faturamento: Number(s.range_faturamento || 0),
+                range_days: Number(s.range_days || 30)
+            };
+        }
+
+        let peakChartInstance = null;
+        let dailyRevChartInstance = null;
+        let topStationChartInstance = null;
+        let excludedStations = new Set();
+        let top5StationsData = [];
+
+        async function fetchHourlyPeaks(startDate, endDate, uf, city) {
+            try {
+                const params = {};
+                if (startDate) params.p_start_date = startDate;
+                if (endDate) params.p_end_date = endDate;
+                if (uf) params.p_uf = uf;
+                if (city) params.p_cidade = city;
+                
+                // Priorizar p_exclude_ids passados via argumento (ex: filtros inteligentes)
+                if (arguments[4] && arguments[4].length > 0) {
+                    params.p_exclude_ids = arguments[4];
+                } else if (excludedStations.size > 0) {
+                    params.p_exclude_ids = Array.from(excludedStations);
+                }
+
+                
+                const { data, error } = await sb.rpc('get_hourly_peaks_v3', params);
+
+                const hoursMap = new Array(24).fill(0);
+                if(data) {
+                    data.forEach(p => {
+                        if(p.hora >= 0 && p.hora <= 23) {
+                            hoursMap[p.hora] = parseFloat(p.total_busy_minutes) || 0;
+                        }
+                    });
+                }
+                
+                const ctx = document.getElementById('hourlyChart').getContext('2d');
+                if (peakChartInstance) peakChartInstance.destroy();
+
+                peakChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: Array.from({length:24}, (_,i) => i.toString().padStart(2, '0')+':00'),
+                        datasets: [{
+                            label: 'Minutos em Uso',
+                            data: hoursMap,
+                            borderColor: '#06b6d4',
+                            backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#0f172a'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        color: '#94a3b8',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { callbacks: { label: (ctx) => formatHours(ctx.raw) } }
+                        },
+                        scales: {
+                            y: { grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            } catch(e) { console.error('Error fetching hourly peaks', e); }
+        }
+
+        async function fetchDailyRevenue(startDate, endDate, uf, city) {
+            try {
+                const params = {};
+                if (startDate) params.p_start_date = startDate;
+                if (endDate) params.p_end_date = endDate;
+                if (uf) params.p_uf = uf;
+                if (city) params.p_cidade = city;
+
+                // Priorizar p_exclude_ids passados via argumento (ex: filtros inteligentes)
+                if (arguments[4] && arguments[4].length > 0) {
+                    params.p_exclude_ids = arguments[4];
+                } else if (excludedStations.size > 0) {
+                    params.p_exclude_ids = Array.from(excludedStations);
+                }
+
+                
+                const { data } = await sb.rpc('get_daily_revenue_v3', params);
+                
+                const labels = [];
+                const revData = [];
+                const useData = [];
+                if(data) {
+                    data.forEach(d => {
+                        // Formatar data (YYYY-MM-DD -> DD/MM)
+                        const dStr = d.usage_date.split('-');
+                        labels.push(`${dStr[2]}/${dStr[1]}`);
+                        revData.push(parseFloat(d.total_faturamento) || 0);
+                        useData.push((parseFloat(d.total_busy_minutes) || 0) / 60); // Em horas
+                    });
+                }
+
+                const ctx = document.getElementById('dailyRevenueChart').getContext('2d');
+                if (dailyRevChartInstance) dailyRevChartInstance.destroy();
+
+                dailyRevChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Faturamento (R$)',
+                                data: revData,
+                                backgroundColor: 'rgba(34, 197, 94, 0.8)',
+                                borderRadius: 4,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Uso (Horas)',
+                                data: useData,
+                                type: 'line',
+                                borderColor: '#a855f7',
+                                backgroundColor: 'transparent',
+                                borderWidth: 2,
+                                tension: 0.3,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        color: '#94a3b8',
+                        plugins: { legend: { labels: { color: '#94a3b8' } } },
+                        scales: {
+                            y: { 
+                                type: 'linear', display: true, position: 'left', 
+                                grid: { color: 'rgba(255,255,255,0.05)' },
+                                ticks: { callback: (v) => 'R$ '+v }
+                            },
+                            y1: {
+                                type: 'linear', display: true, position: 'right',
+                                grid: { drawOnChartArea: false },
+                                ticks: { callback: (v) => v + 'h' }
+                            },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            } catch(e) { console.error('Error fetching daily revenue', e); }
+        }
+
+        function drawTopStations(statsList) {
+            // Ordenar por faturamento desc e pegar top 5
+            top5StationsData = [...statsList].sort((a,b) => (b.f_range || 0) - (a.f_range || 0)).slice(0, 5);
+            const labels = top5StationsData.map(s => s.nome.substring(0, 15) + '...');
+            const dataVal = top5StationsData.map(s => s.f_range);
+
+            const ctx = document.getElementById('topStationChart').getContext('2d');
+            if (topStationChartInstance) topStationChartInstance.destroy();
+
+            topStationChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: dataVal,
+                        backgroundColor: ['#3b82f6', '#22c55e', '#a855f7', '#f59e0b', '#ef4444'],
+                        borderWidth: 0,
+                        hoverOffset: 12
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (evt, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const dataIndex = activeElements[0].index;
+                            const station = top5StationsData[dataIndex];
+                            if(station && station.estacao_id) {
+                                switchTab('map');
+                                if(map) map.flyTo([station.lat, station.lng], 15);
+                                showStationDetail(station.estacao_id);
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#94a3b8', font: {size: 10} } }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        function openExclusionModal() {
+            const listDiv = document.getElementById('exclusion-list');
+            listDiv.innerHTML = '';
+            
+            // Só mostramos as estações afetadas pelo estado/cidade atualmente selecionados
+            const uf = document.getElementById('dash-uf-filter').value;
+            const city = document.getElementById('dash-city-filter').value;
+            
+            let possibleStations = allStats;
+            if(uf) possibleStations = possibleStations.filter(s => s.uf === uf);
+            if(city) possibleStations = possibleStations.filter(s => s.cidade === city);
+
+            // Ordena alfabeticamente
+            possibleStations.sort((a,b) => a.nome.localeCompare(b.nome));
+
+            possibleStations.forEach(s => {
+                const isChecked = !excludedStations.has(s.estacao_id);
+                listDiv.innerHTML += `
+                    <label style="display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05); cursor:pointer;">
+                        <input type="checkbox" value="${s.estacao_id}" ${isChecked ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--accent-blue);">
+                        <span style="color:var(--text-primary)">${s.nome}</span>
+                    </label>
+                `;
+            });
+            document.getElementById('exclusion-modal').style.display = 'flex';
+        }
+
+        function applyExclusions() {
+            document.getElementById('exclusion-modal').style.display = 'none';
+            const checkboxes = document.querySelectorAll('#exclusion-list input[type="checkbox"]');
+            
+            // Reconstruimos a lista de exclusoes baseada apenas no que estava visivel no modal
+            checkboxes.forEach(cb => {
+                if(!cb.checked) {
+                    excludedStations.add(cb.value);
+                } else {
+                    excludedStations.delete(cb.value);
+                }
+            });
+            
+            // Refetch charts then update table
+            renderDashboardTable(false, true);
+        }
+
+        // --- SISTEMA DE FILTROS INTELIGENTES (SMART FILTERS) ---
+        function toggleSmartFilter() {
+            const panel = document.getElementById('smart-filter-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function addFilterRule() {
+            const container = document.getElementById('filter-rules-container');
+            const msg = document.getElementById('no-filters-msg');
+            msg.style.display = 'none';
+
+            const id = Date.now();
+            const div = document.createElement('div');
+            div.id = `rule-${id}`;
+            div.style = "display:grid; grid-template-columns: 2fr 1fr 2fr 40px; gap:8px; align-items:center; background:rgba(255,255,255,0.02); padding:8px; border-radius:8px;";
+            
+            div.innerHTML = `
+                <select class="custom-sel rule-col" style="width:100%; height:32px;">
+                    <option value="nome">Nome do Posto</option>
+                    <option value="cidade">Cidade</option>
+                    <option value="power">Potência (kW)</option>
+                    <option value="tarifa_custo">Custo kWh (R$)</option>
+                    <option value="tarifa_venda">Venda kWh (R$)</option>
+                    <option value="range_busy">Uso Período (h)</option>
+                    <option value="avg_per_day">Média/dia (h)</option>
+                    <option value="f_range">Faturamento (R$)</option>
+                </select>
+                <select class="custom-sel rule-op" style="width:100%; height:32px;">
+                    <option value=">">Maior que</option>
+                    <option value="<">Menor que</option>
+                    <option value="=">Igual a</option>
+                    <option value="contains">Contém</option>
+                </select>
+                <input type="text" class="custom-sel rule-val" placeholder="Valor..." style="width:100%; height:32px; background:rgba(0,0,0,0.2) !important;">
+                <button onclick="removeFilterRule(${id})" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center;">&times;</button>
+            `;
+            
+            // Auto-update ao mudar qualquer campo da regra
+            div.querySelectorAll('select, input').forEach(el => {
+                el.addEventListener('change', () => applySmartFilters());
+                if(el.tagName === 'INPUT') el.addEventListener('keyup', () => applySmartFilters());
+            });
+
+            container.appendChild(div);
+            applySmartFilters();
+        }
+
+        function removeFilterRule(id) {
+            document.getElementById(`rule-${id}`).remove();
+            const container = document.getElementById('filter-rules-container');
+            if (container.children.length === 0) {
+                document.getElementById('no-filters-msg').style.display = 'block';
+            }
+            applySmartFilters();
+        }
+
+        function clearSmartFilters() {
+            document.getElementById('filter-rules-container').innerHTML = '';
+            document.getElementById('no-filters-msg').style.display = 'block';
+            applySmartFilters();
+        }
+
+        function applySmartFilters() {
+            // Coletar regras atuais
+            const rules = [];
+            document.querySelectorAll('#filter-rules-container > div').forEach(row => {
+                rules.push({
+                    col: row.querySelector('.rule-col').value,
+                    op: row.querySelector('.rule-op').value,
+                    val: row.querySelector('.rule-val').value
+                });
+            });
+            smartFilters = rules;
+            renderDashboardTable(false, true);
+        }
         
-        <div class="card">
-            <div class="card-header">
-                <h3>EletroBidu - CCO MOBY</h3>
-                <span class="status-badge status-busy">Em Uso</span>
-            </div>
-            <div class="metrics">
-                <div class="metric-item">
-                    <span class="label">Ocupação (24h)</span>
-                    <span class="value">0.0%</span>
+        function evaluateFilters(s) {
+            // Se não houver regras, passa tudo
+            if (!smartFilters || smartFilters.length === 0) return true;
+
+            // Se o objeto estiver vazio, não passa
+            if (!s) return false;
+
+            // Todas as regras devem ser verdadeiras (AND)
+            return smartFilters.every(r => {
+                // Ignorar regra vazia (sem valor definido)
+                if (r.val === undefined || r.val === null || r.val.trim() === '') return true; 
+
+                let sVal = s[r.col];
+                // Caso especial para colunas calculadas
+                if (r.col === 'f_range') sVal = s.range_faturamento || 0;
+                if (r.col === 'avg_per_day') {
+                    const startVal = document.getElementById('dash-start-date').value;
+                    const endVal = document.getElementById('dash-end-date').value;
+                    const days = getEffectiveDays(startVal, endVal);
+                    sVal = (s.range_busy || 0) / days;
+                }
+
+                // Normalização para comparação (número ou texto)
+                const rValStr = r.val.trim();
+                const rValNum = Number(rValStr);
+
+                if (r.op === '>') return Number(sVal) > rValNum;
+                if (r.op === '<') return Number(sVal) < rValNum;
+                if (r.op === '=') return Number(sVal) === rValNum;
+                if (r.op === 'contains') return String(sVal || '').toLowerCase().includes(rValStr.toLowerCase());
+                
+                return true;
+            });
+        }
+
+        async function init() {
+            document.getElementById('loading').style.display = 'flex';
+            document.getElementById('loading-txt').innerText = "Conectando ao Supabase...";
+            
+            sb = window.supabase.createClient(SB_URL, SB_KEY_DECRYPTED);
+            map = L.map('map', {zoomControl:false}).setView([-23.51, -46.19], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+            markersLayer = L.layerGroup().addTo(map);
+
+            try {
+                document.getElementById('loading-txt').innerText = "Sincronizando dados...";
+
+                // Set default dates - Reduzido para 7 dias para evitar timeout no modo "Brasil"
+                const now = new Date();
+                const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+                const startStr = sevenDaysAgo.toISOString().split('T')[0];
+                const endStr = now.toISOString().split('T')[0];
+                document.getElementById('dash-start-date').value = startStr;
+                document.getElementById('dash-end-date').value = endStr;
+
+                // Single fast call — v3 uses hourly aggregated data (~150ms)
+                allStats = await loadStats(startStr, endStr);
+                fetchHourlyPeaks(startStr, endStr);
+                fetchDailyRevenue(startStr, endStr);
+                console.log("Total stations loaded:", allStats.length);
+
+                populateFilters();
+                renderVIPList(); renderMarkers(); renderDashboardTable();
+                document.getElementById('loading').style.display = 'none';
+
+            } catch(e) {
+                console.error("Falha ao carregar dados:", e);
+                document.getElementById('loading-txt').innerHTML = `
+                    <span style="color:#ef4444">Erro ao carregar dados. Verifique sua conexão.</span><br>
+                    <span style="color:var(--text-secondary); font-size:0.75rem; margin-top:5px; display:block">${e.message}</span>
+                    <button onclick="location.reload()" style="margin-top:12px; padding:8px 20px; background:var(--accent-blue); color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600">
+                        🔄 Tentar Novamente
+                    </button>`;
+            }
+
+            map.on('moveend', renderMarkers);
+            document.getElementById('geo-search').onkeypress = e => { if (e.key === 'Enter') searchAny(); };
+        }
+
+        function populateFilters() {
+            const ufs = [...new Set(allStats.map(s => s.uf))].filter(u => u && u !== 'BR').sort();
+            const ufSel = document.getElementById('dash-uf-filter');
+            ufSel.innerHTML = '<option value="">Brasil (Todos)</option>';
+            ufs.forEach(uf => ufSel.add(new Option(uf, uf)));
+            syncCityFilter();
+        }
+
+        function syncCityFilter() {
+            const uf = document.getElementById('dash-uf-filter').value;
+            const citySel = document.getElementById('dash-city-filter');
+            citySel.innerHTML = '<option value="">Todas as Cidades</option>';
+            const filtered = allStats.filter(s => !uf || s.uf === uf);
+            const cities = [...new Set(filtered.map(s => s.cidade))].filter(c => c).sort();
+            cities.forEach(c => citySel.add(new Option(c, c)));
+        }
+
+        function formatBRL(val) {
+            const n = typeof val === 'number' ? val : Number(val || 0);
+            return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
+        }
+
+        function formatHours(dec) {
+            if (!dec || isNaN(dec) || dec < 0) return '0h 00m';
+            const h = Math.floor(dec);
+            const m = Math.round((dec - h) * 60);
+            return `${h}h ${m.toString().padStart(2, '0')}m`;
+        }
+
+        async function searchAny() {
+            const q = document.getElementById('geo-search').value.trim();
+            const station = allStats.find(s => s.estacao_id === q || s.nome.toLowerCase().includes(q.toLowerCase()));
+            if (station) {
+                map.flyTo([station.lat, station.lng], 15);
+                showStationDetail(station.estacao_id);
+            } else {
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}, Brazil`);
+                    const data = await res.json();
+                    if (data[0]) map.flyTo([data[0].lat, data[0].lon], 13);
+                } catch(e) { console.error("Geocode error:", e); }
+            }
+        }
+
+        function sortBy(key) {
+            if (currentSort.key === key) {
+                currentSort.dir = currentSort.dir === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentSort.key = key;
+                currentSort.dir = 'desc';
+            }
+            renderDashboardTable();
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`view-${tab}`).classList.add('active');
+            if(event) event.target.classList.add('active');
+            if (tab === 'map') setTimeout(() => map.invalidateSize(), 150);
+        }
+
+        function renderMarkers() {
+            markersLayer.clearLayers();
+            const b = map.getBounds();
+            
+            const uf = document.getElementById('dash-uf-filter').value;
+            const city = document.getElementById('dash-city-filter').value;
+            
+            let stAvailable = 0, stBusy = 0, stMaint = 0, stTotal = 0;
+
+            allStats.forEach(s => {
+                if (excludedStations.has(s.estacao_id)) return;
+                if (uf && s.uf !== uf && s.estado !== uf) return;
+                if (city && s.cidade !== city && s.nome_cidade !== city) return;
+                if (typeof evaluateFilters === 'function' && !evaluateFilters(s)) return;
+
+                stTotal++;
+                const lbl = getStatusLabel(s.status);
+                if (lbl === 'Disponível') stAvailable++;
+                else if (lbl === 'Em Uso') stBusy++;
+                else stMaint++;
+
+                if (s.lat && s.lng && b.contains([s.lat, s.lng])) {
+                    const m = L.circleMarker([s.lat, s.lng], { radius:7, weight:2, color:'#fff', fillColor:getColor(s.status), fillOpacity:1 });
+                    m.bindTooltip(`<b>${s.nome}</b><br>Status: ${getStatusLabel(s.status)}<br>Uso: ${s.range_busy}h`, { direction: 'top' });
+                    m.on('click', () => showStationDetail(s.estacao_id));
+                    markersLayer.addLayer(m);
+                }
+            });
+
+            const sumDiv = document.getElementById('map-status-summary');
+            if (sumDiv) {
+                sumDiv.innerHTML = `
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:5px; background:rgba(255,255,255,0.03); padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); font-size:0.75rem;">
+                        <div style="text-align:center;"><div style="color:var(--text-secondary); font-size:0.6rem; font-weight:700;">TOTAL</div><div style="font-weight:900; font-size:1.1rem;">${stTotal}</div></div>
+                        <div style="text-align:center;"><div style="color:var(--accent-green); font-size:0.6rem; font-weight:700;">LIVRES</div><div style="font-weight:900; font-size:1.1rem; color:var(--accent-green);">${stAvailable}</div></div>
+                        <div style="text-align:center;"><div style="color:var(--accent-red); font-size:0.6rem; font-weight:700;">EM USO</div><div style="font-weight:900; font-size:1.1rem; color:var(--accent-red);">${stBusy}</div></div>
+                        <div style="text-align:center;"><div style="color:#f59e0b; font-size:0.6rem; font-weight:700;">OFF/MANUT</div><div style="font-weight:900; font-size:1.1rem; color:#f59e0b;">${stMaint}</div></div>
+                    </div>
+                `;
+            }
+        }
+
+        function getColor(s) { 
+            if (s === 'Available' || s === 'Disponível') return '#22c55e';
+            if (['Busy','Occupied','Charging','In Use','Ocupado','Finishing','Reserved','Preparing'].includes(s)) return '#ef4444';
+            if (s === 'Unavailable' || s === 'Faulted' || s === 'SuspendedEVSE' || s === 'SuspendedEV') return '#f59e0b';
+            if (s === 'Offline' || s === 'Desconectado') return '#64748b';
+            if (!s || s === '' || s === 'null') return '#22c55e'; // Sem status = provavelmente disponível
+            return '#94a3b8';
+        }
+
+        function getStatusLabel(s) {
+            if (s === 'Available' || s === 'Disponível') return 'Disponível';
+            if (['Busy','Occupied','Charging','In Use','Ocupado','Finishing','Reserved','Preparing'].includes(s)) return 'Em Uso';
+            if (s === 'Unavailable' || s === 'Faulted' || s === 'SuspendedEVSE' || s === 'SuspendedEV') return 'Manutenção';
+            if (s === 'Offline' || s === 'Desconectado') return 'Desconectado';
+            if (!s || s === '' || s === 'null') return 'Disponível';
+            return s;
+        }
+
+        function getBadgeClass(s) {
+            if (s === 'Available' || s === 'Disponível') return 'badge-green';
+            if (['Busy','Occupied','Charging','In Use','Ocupado','Finishing','Reserved','Preparing'].includes(s)) return 'badge-red';
+            if (s === 'Unavailable' || s === 'Faulted' || s === 'SuspendedEVSE' || s === 'SuspendedEV') return 'badge-yellow';
+            if (!s || s === '' || s === 'null') return 'badge-green';
+            return 'badge-gray';
+        }
+
+        async function showStationDetail(id) {
+            const s = allStats.find(x => x.estacao_id === id);
+            if(!s) return;
+            const container = document.getElementById('station-detail');
+            container.innerHTML = `<div class="card"><h4>${s.nome}</h4><p style="font-size:0.75rem; color:var(--accent-blue)">⚡ Conectando à base Kotta...</p></div>`;
+            
+            let priceV = 2.50;
+            try {
+                const res = await fetch(`https://api.tupinambaenergia.com.br/station/${id}`);
+                if (res.ok) {
+                    const tupi = await res.json();
+                    priceV = (tupi.paymentCharge?.value / 100) || 2.50;
+                }
+            } catch(e) {
+                console.warn("Could not fetch live price, using default:", e.message);
+            }
+
+            const priceC = s.tarifa_custo || 0.85;
+            const pwr = s.power || 60;
+            const rangeDays = s.range_days || 30;
+            
+            // Revenue calculations (Usando range_faturamento da view_v3)
+            const revRange = s.range_faturamento || 0;
+
+            container.innerHTML = `
+            <div class="card">
+                <h3 style="margin:0 0 5px 0; font-size:1rem">${s.nome}</h3>
+                <div style="font-size:0.6rem; color:var(--text-secondary); margin-bottom:10px">ID: ${id}</div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:12px">
+                    <span class="badge ${getBadgeClass(s.status)}">${getStatusLabel(s.status)}</span>
+                    <span style="font-size:0.7rem; color:var(--text-secondary)">${s.cidade} - ${s.uf}</span>
                 </div>
-                <div class="metric-item">
-                    <span class="label">Média Diária</span>
-                    <span class="value">19.1%</span>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin-bottom:15px">
+                    <div style="background:rgba(255,255,255,0.03); padding:8px; border-radius:8px; text-align:center">
+                        <div style="font-size:0.55rem; color:var(--text-secondary)">POTÊNCIA</div>
+                        <div style="font-size:0.85rem; font-weight:700; color:var(--accent-blue)">${pwr}kW</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); padding:8px; border-radius:8px; text-align:center">
+                        <div style="font-size:0.55rem; color:var(--text-secondary)">CUSTO kWh</div>
+                        <div style="font-size:0.85rem; font-weight:700; color:#f59e0b">${formatBRL(priceC)}</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); padding:8px; border-radius:8px; text-align:center">
+                        <div style="font-size:0.55rem; color:var(--text-secondary)">VENDA kWh</div>
+                        <div style="font-size:0.85rem; font-weight:700; color:var(--accent-green)">${formatBRL(priceV)}</div>
+                    </div>
                 </div>
-                <div class="metric-item">
-                    <span class="label">Média Horas/Dia</span>
-                    <span class="value">4.6h</span>
+                
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px">
+                    <div style="background:rgba(255,255,255,0.03); padding:10px; border-radius:8px">
+                        <div style="font-size:0.6rem; color:var(--text-secondary)">MÉDIA 7D</div>
+                        <div style="font-size:0.9rem; font-weight:700">${formatHours(s.busy_7d/getEffectiveDays(new Date(Date.now() - 6*86400000), new Date()))}/dia</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); padding:10px; border-radius:8px">
+                        <div style="font-size:0.6rem; color:var(--text-secondary)">MÉDIA 30D</div>
+                        <div style="font-size:0.9rem; font-weight:700">${formatHours(s.busy_30d/getEffectiveDays(new Date(Date.now() - 29*86400000), new Date()))}/dia</div>
+                    </div>
                 </div>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" style="width: 19.1%"></div>
-            </div>
-        </div>
-        
-        <div class="card">
-            <div class="card-header">
-                <h3>EletroBidu - CCO Zeta Uno</h3>
-                <span class="status-badge status-busy">Em Uso</span>
-            </div>
-            <div class="metrics">
-                <div class="metric-item">
-                    <span class="label">Ocupação (24h)</span>
-                    <span class="value">40.0%</span>
+
+                <div style="border-top:1px dashed rgba(255,255,255,0.1); padding-top:10px; margin-bottom:15px">
+                    <div style="font-size:0.65rem; color:var(--text-secondary); margin-bottom:5px">FILTRO PERSONALIZADO</div>
+                    <div style="display:flex; gap:5px; margin-bottom:10px">
+                        <input type="date" id="detail-start-date" class="custom-date" style="flex:1; padding:4px" min="2026-03-25">
+                        <input type="date" id="detail-end-date" class="custom-date" style="flex:1; padding:4px" min="2026-03-25">
+                        <button class="btn-apply" onclick="recalcDetail('${id}')" style="padding:4px 8px">OK</button>
+                    </div>
+                    <div id="range-result"></div>
                 </div>
-                <div class="metric-item">
-                    <span class="label">Média Diária</span>
-                    <span class="value">28.7%</span>
+
+                <div class="calc-ui">
+                    <div class="calc-row"><span>Fat. Total (Período Global)</span><span style="color:var(--accent-purple)">${formatBRL(revRange)}</span></div>
                 </div>
-                <div class="metric-item">
-                    <span class="label">Média Horas/Dia</span>
-                    <span class="value">6.9h</span>
-                </div>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" style="width: 28.7%"></div>
-            </div>
-        </div>
-        
-        <div class="card">
-            <div class="card-header">
-                <h3>EletroBidu - Posto Equipe Shopping</h3>
-                <span class="status-badge status-available">Disponível</span>
-            </div>
-            <div class="metrics">
-                <div class="metric-item">
-                    <span class="label">Ocupação (24h)</span>
-                    <span class="value">50.0%</span>
-                </div>
-                <div class="metric-item">
-                    <span class="label">Média Diária</span>
-                    <span class="value">26.0%</span>
-                </div>
-                <div class="metric-item">
-                    <span class="label">Média Horas/Dia</span>
-                    <span class="value">6.2h</span>
-                </div>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" style="width: 26.0%"></div>
-            </div>
-        </div>
-        
-        <div class="card">
-            <div class="card-header">
-                <h3>Posto Quality</h3>
-                <span class="status-badge status-available">Disponível</span>
-            </div>
-            <div class="metrics">
-                <div class="metric-item">
-                    <span class="label">Ocupação (24h)</span>
-                    <span class="value">20.0%</span>
-                </div>
-                <div class="metric-item">
-                    <span class="label">Média Diária</span>
-                    <span class="value">18.5%</span>
-                </div>
-                <div class="metric-item">
-                    <span class="label">Média Horas/Dia</span>
-                    <span class="value">4.4h</span>
-                </div>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" style="width: 18.5%"></div>
-            </div>
-        </div>
-        
-        </div>
-        
-        <div class="footer">
-            <p>Sistema Autônomo de Monitoramento &copy; 2026</p>
-        </div>
-    </body>
-    </html>
-    
+            </div>`;
+            
+            // Set default range for detail
+            document.getElementById('detail-start-date').value = document.getElementById('dash-start-date').value;
+            document.getElementById('detail-end-date').value = document.getElementById('dash-end-date').value;
+            recalcDetail(id);
+        }
+
+        async function recalcDetail(id) {
+            const startDate = document.getElementById('detail-start-date').value;
+            const endDate = document.getElementById('detail-end-date').value;
+            const rangeResult = document.getElementById('range-result');
+
+            if (!startDate || !endDate) {
+                rangeResult.innerHTML = '<div style="font-size:0.75rem; color:var(--text-secondary)">Selecione as datas.</div>';
+                return;
+            }
+
+            rangeResult.innerHTML = '<div style="font-size:0.75rem; color:var(--accent-blue)">⏳ Calculando...</div>';
+
+            try {
+                const data = await loadStats(startDate, endDate);
+                const s = data.find(x => x.estacao_id === id);
+                if(s) {
+                    const rev = s.range_faturamento || 0;
+                    const days = getEffectiveDays(startDate, endDate);
+                    const avgPerDay = s.range_busy / days;
+                    rangeResult.innerHTML = `
+                        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px">
+                            <div style="background:rgba(59,130,246,0.1); padding:8px; border-radius:6px">
+                                <div style="font-size:0.55rem; color:var(--text-secondary)">USO TOTAL</div>
+                                <div style="font-size:0.85rem; font-weight:700">${formatHours(s.range_busy)}</div>
+                            </div>
+                            <div style="background:rgba(168,85,247,0.1); padding:8px; border-radius:6px">
+                                <div style="font-size:0.55rem; color:var(--text-secondary)">MÉDIA/DIA (${days}d)</div>
+                                <div style="font-size:0.85rem; font-weight:700; color:var(--accent-purple)">${formatHours(avgPerDay)}</div>
+                            </div>
+                            <div style="background:rgba(34,197,94,0.1); padding:8px; border-radius:6px">
+                                <div style="font-size:0.55rem; color:var(--text-secondary)">FATURAMENTO</div>
+                                <div style="font-size:0.85rem; font-weight:700; color:var(--accent-green)">${formatBRL(rev)}</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    rangeResult.innerHTML = '<div style="font-size:0.75rem; color:var(--text-secondary)">Sem dados para este período.</div>';
+                }
+            } catch(e) {
+                console.error("recalcDetail error:", e);
+                rangeResult.innerHTML = '<div style="font-size:0.75rem; color:var(--accent-red)">Erro ao calcular período.</div>';
+            }
+        }
+
+        function renderVIPList() {
+            const container = document.getElementById('vip-list'); container.innerHTML = '';
+            const startDate = document.getElementById('dash-start-date').value;
+            const endDate = document.getElementById('dash-end-date').value;
+            const rangeDays = getEffectiveDays(startDate, endDate);
+            
+            VIP_IDS.forEach(id => {
+                const s = allStats.find(x => x.estacao_id === id);
+                if (s) {
+                    const avg = (s.range_busy || 0) / rangeDays;
+                    const div = document.createElement('div'); div.className = 'card'; div.style.padding = '10px'; div.style.cursor = 'pointer';
+                    div.innerHTML = `
+                        <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.75rem;margin-bottom:5px">
+                            <span style="font-weight:700">${s.nome}</span>
+                            <span style="font-weight:700; color:${getColor(s.status)}">${getStatusLabel(s.status)}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.65rem;color:var(--text-secondary)">
+                            <span>Uso Médio (Período):</span>
+                            <span style="color:var(--accent-purple);font-weight:700">${formatHours(avg)}/dia</span>
+                        </div>`;
+                    div.onclick = () => { map.flyTo([s.lat, s.lng], 15); showStationDetail(id); };
+                    container.appendChild(div);
+                }
+            });
+        }
+
+        async function renderDashboardTable(reFetch = false, refetchCharts = false) {
+            const startDate = document.getElementById('dash-start-date').value;
+            const endDate = document.getElementById('dash-end-date').value;
+            const uf = document.getElementById('dash-uf-filter').value;
+            const city = document.getElementById('dash-city-filter').value;
+            const tbody = document.getElementById('dash-table-body');
+            if (tbody) tbody.innerHTML = '';
+
+            if (reFetch || refetchCharts || allStats.length === 0) {
+                if (!startDate || !endDate) return;
+
+                document.getElementById('loading').style.display = 'flex';
+                document.getElementById('loading-txt').innerText = "Sincronizando Dados...";
+                
+                try {
+                    allStats = await loadStats(startDate, endDate, uf, city);
+                    renderVIPList();
+                } catch(e) {
+                    console.error("Error refetching:", e);
+                    document.getElementById('loading').style.display = 'none';
+                    return;
+                }
+                document.getElementById('loading').style.display = 'none';
+            }
+
+            let filtered = allStats.filter(s => {
+                // Filtros de UF/Cidade
+                if (uf && s.uf !== uf && s.estado !== uf) return false;
+                if (city && s.cidade !== city && s.nome_cidade !== city) return false;
+                
+                // Exclusões manuais
+                if (excludedStations.has(s.estacao_id)) return false;
+                
+                // Filtros de Inteligência (Custom Builder)
+                return evaluateFilters(s);
+            });
+
+            // Sincronizar gráficos baseado no que sobrou após os filtros
+            if (reFetch || refetchCharts) {
+                const currentFilteredIds = new Set(filtered.map(s => s.estacao_id));
+                const hiddenIds = allStats
+                    .filter(s => !currentFilteredIds.has(s.estacao_id))
+                    .map(s => s.estacao_id);
+                
+                try {
+                    fetchHourlyPeaks(startDate, endDate, uf, city, hiddenIds);
+                    fetchDailyRevenue(startDate, endDate, uf, city, hiddenIds);
+                    renderMarkers(); 
+                } catch(e) { console.error("Error updating charts:", e); }
+            }
+            
+            // 2. Data Preparation for Sorting/Display
+            const startVal = document.getElementById('dash-start-date').value;
+            const endVal = document.getElementById('dash-end-date').value;
+            const rangeDays = getEffectiveDays(startVal, endVal);
+            
+            const eff7 = getEffectiveDays(new Date(Date.now() - 6*86400000), new Date());
+            const eff30 = getEffectiveDays(new Date(Date.now() - 29*86400000), new Date());
+
+            const dataToRender = filtered.map(s => {
+                const pwr = s.power || 60;
+                const priceV = s.tarifa_venda || 0;
+                
+                // Usando o faturamento já mastigado pela função no BD!
+                const f_range = s.range_faturamento || 0;
+                const avg_per_day = rangeDays > 0 ? (s.range_busy || 0) / rangeDays : 0;
+                return { ...s, f_range, avg_per_day, pwr, priceV, eff7, eff30 };
+            });
+
+            // 3. Sorting
+            dataToRender.sort((a, b) => {
+                let valA = a[currentSort.key];
+                let valB = b[currentSort.key];
+                
+                // Handle missing values
+                if (valA === undefined || valA === null) valA = 0;
+                if (valB === undefined || valB === null) valB = 0;
+
+                if (typeof valA === 'string') valA = valA.toLowerCase();
+                if (typeof valB === 'string') valB = valB.toLowerCase();
+
+                if (valA < valB) return currentSort.dir === 'asc' ? -1 : 1;
+                if (valA > valB) return currentSort.dir === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            // Update header UI
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('asc', 'desc');
+                if (th.id === `sort-${currentSort.key}`) {
+                    th.classList.add(currentSort.dir);
+                }
+            });
+
+            // 4. Rendering and Summary Calculation
+            let totRange = 0, sumTarif = 0, count = 0, totHrs = 0;
+            
+            dataToRender.forEach(s => {
+                totRange += s.f_range;
+                totHrs += (s.range_busy || 0);
+                sumTarif += (s.tarifa_custo || 0.85); 
+                count++;
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${s.nome.substring(0,25)}</td>
+                    <td>${s.cidade}</td>
+                    <td style="color:var(--accent-blue)">${s.pwr}kW</td>
+                    <td style="color:#f59e0b">${formatBRL(s.tarifa_custo || 0.85)}</td>
+                    <td style="color:var(--accent-green)">${formatBRL(s.priceV)}</td>
+                    <td>${formatHours(s.busy_7d/s.eff7)}/dia</td>
+                    <td>${formatHours(s.busy_30d/s.eff30)}/dia</td>
+                    <td style="font-weight:700">${formatHours(s.range_busy)}</td>
+                    <td style="color:var(--accent-purple)">${formatHours(s.avg_per_day)}/dia</td>
+                    <td style="color:var(--accent-green); font-weight:700">${formatBRL(s.f_range)}</td>
+                `;
+                tr.onclick = () => { switchTab('map'); map.flyTo([s.lat, s.lng], 15); showStationDetail(s.estacao_id); };
+                tbody.appendChild(tr);
+            });
+
+            // Summary cards
+            const avgHrsPerDayPerStation = count > 0 ? (totHrs / count) / rangeDays : 0;
+
+            document.getElementById('total-revenue').innerText = formatBRL(totRange);
+            document.getElementById('total-stations').innerText = count;
+            document.getElementById('avg-cost').innerText = formatBRL(count > 0 ? sumTarif/count : 0.85);
+            document.getElementById('peak-occ').innerText = formatHours(avgHrsPerDayPerStation) + '/dia';
+            
+            // --- RESUMO POR POTÊNCIA ---
+            const powerGroups = {};
+            dataToRender.forEach(s => {
+                const p = s.pwr || 0;
+                if (!powerGroups[p]) powerGroups[p] = { count: 0, totHrs: 0, totRev: 0 };
+                powerGroups[p].count++;
+                powerGroups[p].totHrs += (s.range_busy || 0);
+                powerGroups[p].totRev += (s.f_range || 0);
+            });
+
+            const pBody = document.getElementById('power-summary-body');
+            if (pBody) {
+                pBody.innerHTML = '';
+                const sortedPowers = Object.keys(powerGroups).sort((a,b) => Number(b) - Number(a));
+                sortedPowers.forEach(p => {
+                    const g = powerGroups[p];
+                    const avgHrs = rangeDays > 0 ? (g.totHrs / g.count) / rangeDays : 0;
+                    const avgRev = rangeDays > 0 ? (g.totRev / g.count) / rangeDays : 0;
+                    pBody.innerHTML += `
+                        <tr>
+                            <td style="color:var(--accent-blue); font-weight:bold;">${p}kW</td>
+                            <td>${g.count}</td>
+                            <td>${formatHours(avgHrs)}</td>
+                            <td style="color:var(--accent-green); font-weight:bold;">${formatBRL(avgRev)}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            drawTopStations(dataToRender);
+
+            const rawDays = (filtered[0] && filtered[0].range_days) || 30;
+            let statusText = `${rangeDays}d`;
+            if (rangeDays !== rawDays) {
+                statusText = `${rangeDays}d úteis (Total: ${rawDays}d)`;
+            }
+            document.getElementById('global-status-label').innerText = `${city || uf || 'Brasil'} - Active Network (${statusText})`;
+        }
+
+        // Autocompleta login se já existir chave no localStorage
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedKey = localStorage.getItem('kotta_sb_key');
+            if (savedKey) {
+                SB_KEY_DECRYPTED = savedKey;
+                document.getElementById('login-screen').style.display = 'none';
+                init();
+            } else {
+                document.getElementById('login-pwd').focus();
+            }
+        });
+
+    </script>
+</body>
+</html>
