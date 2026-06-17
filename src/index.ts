@@ -340,10 +340,14 @@ async function runIngestion(): Promise<void> {
   }
   console.log('LOG: Processamento de estatísticas horárias finalizado.');
 
-  // 6. Cleanup (registros > 12 horas)
-  const twelveHoursAgo = new Date();
-  twelveHoursAgo.setHours(twelveHoursAgo.getHours() - 12);
-  await supabase.from('monitoramento').delete().lt('timestamp', twelveHoursAgo.toISOString());
+  // 6. Cleanup (registros > 24 horas — roda 1x por hora para economizar Disk IO)
+  const brTimeNow = new Date(new Date().getTime() - 3 * 60 * 60 * 1000);
+  if (brTimeNow.getUTCMinutes() < 10) { // só roda nos primeiros 10 min de cada hora
+    const oneDayAgo = new Date();
+    oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+    await supabase.from('monitoramento').delete().lt('timestamp', oneDayAgo.toISOString());
+    console.log('LOG: Cleanup de monitoramento executado (registros > 24h removidos).');
+  }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   const msg = usedFallback
@@ -364,8 +368,8 @@ runIngestion().catch(async (error) => {
   await sendTelegramAlert(text);
 });
 
-// Agenda execução a cada 5 minutos
-cron.schedule('*/5 * * * *', async () => {
+// Agenda execução a cada 10 minutos
+cron.schedule('*/10 * * * *', async () => {
   try {
     await runIngestion();
   } catch (error) {
