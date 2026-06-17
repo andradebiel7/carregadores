@@ -15,7 +15,20 @@ const STATUS_URL = 'https://api.tupinambaenergia.com.br/stationsShortVersion';
 const TELEGRAM_TOKEN = '8512644919:AAEosg5DCEiou-3IBFzZV4k0ObBkOYtYmGA';
 const TELEGRAM_CHAT_ID = '1498248093';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+// Supabase client com timeout de 30s para evitar travamento quando o banco estiver lento
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  global: {
+    fetch: async (url: string | URL | Request, options: RequestInit = {}) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      try {
+        return await fetch(url, { ...options, signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+  }
+});
 
 const API_HEADERS: Record<string, string> = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
