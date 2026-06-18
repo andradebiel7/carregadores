@@ -30,6 +30,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   }
 });
 
+// ============================================================
+// CACHE IN-MEMORY: detecta mudanças nas estações entre ciclos
+// Evita reescrever linhas no banco quando nada mudou
+// ============================================================
+const stationCache = new Map<string, string>(); // id → fingerprint
+let lastFullUpsertAt = 0; // timestamp da última upsert completa (força 1x/hora)
+
 const API_HEADERS: Record<string, string> = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   'Accept': 'application/json, text/plain, */*',
@@ -309,12 +316,41 @@ async function runIngestion(): Promise<void> {
     }
   }
 
-  // 3. Upsert de estações (chunks de 100)
-  console.log(`LOG: Iniciando upsert de ${stationMetadata.length} estações...`);
-  const fastChunkSize = 100;
+  // 3. Upsert de estações — só envia as que mudaram (delta)
+  const cycleTs = Date.now();
+  const forceFullUpsert = cycleTs - lastFullUpsertAt > 60 * 60 * 1000; // 1x/hora força tudo
 
-  for (let i = 0; i < stationMetadata.length; i += fastChunkSize) {
-    const chunk = stationMetadata.slice(i, i + fastChunkSize);
+  const changedStations = stationMetadata.filter(s => {
+    if (forceFullUpsert) return true; // força completo
+    const fingerprint = [
+      s.status || '',
+      String(s.power || ''),
+      String(s.tarifa_venda || ''),
+      s.nome || ''
+    ].join('|');
+    const prev = stationCache.get(s._id);
+    return prev !== fingerprint;
+  });
+
+  // Atualiza cache com estado atual
+  for (const s of stationMetadata) {
+    const fingerprint = [
+      s.status || '',
+      String(s.power || ''),
+      String(s.tarifa_venda || ''),
+      s.nome || ''
+    ].join('|');
+    stationCache.set(s._id, fingerprint);
+  }
+
+  if (forceFullUpsert) lastFullUpsertAt = cycleTs;
+
+  const upsertMode = forceFullUpsert ? 'completo' : 'delta';
+  console.log(`LOG: Upsert de ${changedStations.length}/${stationMetadata.length} estações (${upsertMode})...`);
+
+  const fastChunkSize = 100;
+  for (let i = 0; i < changedStations.length; i += fastChunkSize) {
+    const chunk = changedStations.slice(i, i + fastChunkSize);
     const { error } = await supabase.rpc('smart_upsert_stations', { payload: chunk });
     if (error) throw error;
   }
