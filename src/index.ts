@@ -235,6 +235,10 @@ async function runIngestion(): Promise<void> {
 
     const stationPower = meta.power || (s.connectedPlugs && s.connectedPlugs[0]?.power) || null;
 
+    // Filtro: ignora estações com menos de 30 kW
+    const powerKw = Number(stationPower) || 0;
+    if (powerKw < 30) continue;
+
     // Inteligência de Cidade
     let finalCity = meta.city;
     if (finalCity === 'Desconhecido' || !finalCity) {
