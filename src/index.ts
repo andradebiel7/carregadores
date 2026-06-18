@@ -34,7 +34,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 // CACHE IN-MEMORY: detecta mudanças nas estações entre ciclos
 // Evita reescrever linhas no banco quando nada mudou
 // ============================================================
-const stationCache = new Map<string, string>(); // id → fingerprint
+const stationCache = new Map<string, string>(); // id → fingerprint (para upsert delta)
+const previousStatusMap = new Map<string, string>(); // id → último status conhecido (para monitoramento)
 let lastFullUpsertAt = 0; // timestamp da última upsert completa (força 1x/hora)
 
 const API_HEADERS: Record<string, string> = {
@@ -141,7 +142,8 @@ async function loadCachedMetadata(): Promise<Map<string, any>> {
   console.log('LOG: Usando metadados do cache (banco de dados)...');
   const { data, error } = await supabase
     .from('stations')
-    .select('id, city, state, neighborhood, power, tarifa_venda');
+    .select('id, city, state, neighborhood, power, tarifa_venda')
+    .range(0, 9999); // garante que não é limitado ao padrão de 1000 rows do Supabase
 
   if (error || !data) {
     throw new Error('Falha ao carregar metadados do cache: ' + (error?.message || 'sem dados'));
@@ -215,21 +217,8 @@ async function runIngestion(): Promise<void> {
     throw new Error(`API Status falhou: ${reason}`);
   }
 
-  // Buscar status atual das estações no banco para otimização de I/O
-  console.log('LOG: Buscando status atual das estações no banco para otimização de I/O...');
-  const { data: currentStationsData, error: currentStationsError } = await supabase
-    .from('stations')
-    .select('id, status');
+  // (status anterior é rastreado em previousStatusMap, sem consulta ao banco a cada ciclo)
 
-  const dbStatusMap = new Map<string, string>();
-  if (!currentStationsError && currentStationsData) {
-    currentStationsData.forEach((s: any) => {
-      dbStatusMap.set(s.id, s.status || '');
-    });
-    console.log(`LOG: Mapeados ${dbStatusMap.size} status atuais do banco para comparação.`);
-  } else {
-    console.warn('LOG WARN: Falha ao buscar status atuais do banco. Otimização de I/O ignorada nesta execução.');
-  }
 
   const stationMetadata: any[] = [];
   const statusLogs: any[] = [];
@@ -272,7 +261,7 @@ async function runIngestion(): Promise<void> {
 
     // Só registrar log se houver mudança de status
     const st = s.stateName || '';
-    const previousSt = dbStatusMap.has(s._id) ? dbStatusMap.get(s._id) : null;
+    const previousSt = previousStatusMap.get(s._id) ?? null;
 
     if (st && st !== previousSt) {
       statusLogs.push({
@@ -282,6 +271,9 @@ async function runIngestion(): Promise<void> {
         timestamp: now
       });
     }
+
+    // Atualiza status em memória para próxima comparação
+    if (st) previousStatusMap.set(s._id, st);
 
     // Lógica de Agregação Horária
     let busy = 0;
