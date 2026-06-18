@@ -349,7 +349,7 @@ async function runIngestion(): Promise<void> {
 }
 
 // ============================================================
-// CRON: Executa a cada 5 minutos
+// CRON: Executa a cada 10 minutos
 // ============================================================
 console.log('🚀 Tupi Ingestion Service iniciado. Aguardando próxima execução...');
 
@@ -368,5 +368,97 @@ cron.schedule('*/10 * * * *', async () => {
     console.error('LOG ERROR: Fatal error no cron', error);
     const text = `🚨 *Tupi Monitoramento ERRO* 🚨\n\nA rotina de ingestão (${new Date().toLocaleString('pt-BR')}) falhou.\n\n*Detalhes:*\n\`${(error as Error).message}\``;
     await sendTelegramAlert(text);
+  }
+});
+
+// ============================================================
+// COMPACTAÇÃO DIÁRIA — roda à meia-noite horário Brasília (03:00 UTC)
+// Compacta os registros de ontem em 1 linha de resumo por estação
+// ============================================================
+async function runDailyCompaction(): Promise<void> {
+  console.log('LOG: [Compactação] Iniciando compactação diária do monitoramento...');
+
+  // Calcula o início e fim de "ontem" no horário de Brasília (UTC-3)
+  // Ex: se agora é 00:05 de 18/Jun (BRT), "ontem" foi 17/Jun das 03:00 UTC até 03:00 UTC do dia 18
+  const utcNow = new Date();
+
+  // Início de ontem BRT = (hoje UTC - 3h) - 1 dia → arredondado para meia-noite BRT → +3h para UTC
+  const todayMidnightBR = new Date(Date.UTC(
+    utcNow.getUTCFullYear(),
+    utcNow.getUTCMonth(),
+    utcNow.getUTCDate(),
+    3, 0, 0, 0 // 03:00 UTC = 00:00 BRT
+  ));
+  const yesterdayMidnightBR = new Date(todayMidnightBR.getTime() - 24 * 60 * 60 * 1000);
+
+  const startISO = yesterdayMidnightBR.toISOString();
+  const endISO   = todayMidnightBR.toISOString();
+
+  // Busca todos os registros de ontem (excluindo sentinela de erro do sistema)
+  const { data: records, error: fetchError } = await supabase
+    .from('monitoramento')
+    .select('estacao_id, nome, status, timestamp')
+    .gte('timestamp', startISO)
+    .lt('timestamp', endISO)
+    .neq('estacao_id', '_SYSTEM_ERROR_')
+    .order('timestamp', { ascending: true });
+
+  if (fetchError) {
+    console.error('LOG ERROR: [Compactação] Falha ao buscar registros:', fetchError.message);
+    return;
+  }
+
+  if (!records || records.length === 0) {
+    console.log('LOG: [Compactação] Nenhum registro encontrado para ontem. Nada a compactar.');
+    return;
+  }
+
+  // Para cada estação, fica com o ÚLTIMO status do dia (ordem ASC → último = mais recente)
+  const byStation = new Map<string, { estacao_id: string; nome: string; status: string }>();
+  for (const r of records) {
+    byStation.set(r.estacao_id, { estacao_id: r.estacao_id, nome: r.nome, status: r.status });
+  }
+
+  // Monta as linhas de resumo com timestamp = início do dia (meia-noite BRT)
+  const summaryRows = Array.from(byStation.values()).map(s => ({
+    estacao_id: s.estacao_id,
+    nome:       s.nome,
+    status:     s.status,
+    timestamp:  startISO, // meia-noite do dia → identifica o dia no frontend
+  }));
+
+  // 1. Apaga os registros individuais de ontem
+  const { error: deleteError } = await supabase
+    .from('monitoramento')
+    .delete()
+    .gte('timestamp', startISO)
+    .lt('timestamp', endISO)
+    .neq('estacao_id', '_SYSTEM_ERROR_');
+
+  if (deleteError) {
+    console.error('LOG ERROR: [Compactação] Falha ao deletar registros:', deleteError.message);
+    return;
+  }
+
+  // 2. Insere os resumos
+  const { error: insertError } = await supabase
+    .from('monitoramento')
+    .insert(summaryRows);
+
+  if (insertError) {
+    console.error('LOG ERROR: [Compactação] Falha ao inserir resumos:', insertError.message);
+    return;
+  }
+
+  const dateLabel = yesterdayMidnightBR.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  console.log(`LOG: [Compactação] ✅ ${records.length} registros de ${dateLabel} compactados em ${summaryRows.length} resumos.`);
+}
+
+// Agenda compactação à meia-noite BRT (03:00 UTC)
+cron.schedule('0 3 * * *', async () => {
+  try {
+    await runDailyCompaction();
+  } catch (error) {
+    console.error('LOG ERROR: [Compactação] Erro inesperado:', error);
   }
 });
