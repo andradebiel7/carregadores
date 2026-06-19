@@ -19,20 +19,8 @@ const STATUS_URL = 'https://api.tupinambaenergia.com.br/stationsShortVersion';
 const TELEGRAM_TOKEN = '8512644919:AAEosg5DCEiou-3IBFzZV4k0ObBkOYtYmGA';
 const TELEGRAM_CHAT_ID = '1498248093';
 
-// Supabase client com timeout de 30s para evitar travamento quando o banco estiver lento
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  global: {
-    fetch: async (url: string | URL | Request, options: RequestInit = {}) => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
-      try {
-        return await fetch(url, { ...options, signal: controller.signal });
-      } finally {
-        clearTimeout(timeout);
-      }
-    }
-  }
-});
+// Supabase client usa o fetch padrão (cross-fetch) que é mais estável
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // ============================================================
 // CACHE IN-MEMORY: detecta mudanças nas estações entre ciclos
@@ -75,10 +63,7 @@ const CITY_TO_STATE: Record<string, string> = {
 async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delays = [2000, 5000, 10000]): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 45000); // 45s timeout
-      const res = await fetch(url, { ...options, signal: controller.signal });
-      clearTimeout(timeout);
+      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(60000) });
 
       if (res.ok) return res;
 
