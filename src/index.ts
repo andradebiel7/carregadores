@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import cron from 'node-cron';
+import dns from 'node:dns';
+
+// Fix Node 18+ native fetch IPv6 hanging issues on certain hosts like Railway
+dns.setDefaultResultOrder('ipv4first');
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
