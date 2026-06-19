@@ -60,19 +60,21 @@ const CITY_TO_STATE: Record<string, string> = {
 // ============================================================
 // UTILS: Retry com Backoff
 // ============================================================
-async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delays = [2000, 5000, 10000]): Promise<Response> {
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delays = [2000, 5000, 10000]): Promise<any> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetch(url, { ...options, signal: AbortSignal.timeout(60000) });
 
-      if (res.ok) return res;
+      if (res.ok) {
+        return await res.json();
+      }
 
       if (attempt < retries && res.status >= 500) {
         console.log(`LOG: Tentativa ${attempt + 1} falhou (status ${res.status}). Aguardando ${delays[attempt]}ms...`);
         await new Promise(r => setTimeout(r, delays[attempt]));
         continue;
       }
-      return res;
+      throw new Error(`HTTP erro ${res.status}`);
     } catch (err) {
       if (attempt < retries) {
         console.log(`LOG: Tentativa ${attempt + 1} falhou (${(err as Error).message}). Aguardando ${delays[attempt]}ms...`);
@@ -170,8 +172,8 @@ async function runIngestion(): Promise<void> {
   ]);
 
   // Processar Metadados
-  if (metaResSettled.status === 'fulfilled' && metaResSettled.value.ok) {
-    const allMeta = await metaResSettled.value.json() as any[];
+  if (metaResSettled.status === 'fulfilled') {
+    const allMeta = metaResSettled.value as any[];
     metaMap = new Map<string, any>();
     allMeta.forEach((m: any) => {
       if (m._id) {
@@ -186,9 +188,7 @@ async function runIngestion(): Promise<void> {
     });
     console.log(`LOG: Mapeados ${metaMap.size} metadados da API.`);
   } else {
-    const reason = metaResSettled.status === 'rejected'
-      ? (metaResSettled.reason as Error).message
-      : `Status ${(metaResSettled as PromiseFulfilledResult<Response>).value.status}`;
+    const reason = (metaResSettled.reason as Error).message;
     console.warn(`LOG WARN: API Metadata indisponível (${reason}). Usando cache...`);
     metaMap = await loadCachedMetadata();
     usedFallback = true;
@@ -196,13 +196,11 @@ async function runIngestion(): Promise<void> {
 
   // Processar Status
   let stations: any[];
-  if (statusResSettled.status === 'fulfilled' && statusResSettled.value.ok) {
-    stations = await statusResSettled.value.json() as any[];
+  if (statusResSettled.status === 'fulfilled') {
+    stations = statusResSettled.value as any[];
     console.log(`LOG: Recebidos ${stations.length} carregadores ativos.`);
   } else {
-    const reason = statusResSettled.status === 'rejected'
-      ? (statusResSettled.reason as Error).message
-      : `Status ${(statusResSettled as PromiseFulfilledResult<Response>).value.status}`;
+    const reason = (statusResSettled.reason as Error).message;
     throw new Error(`API Status falhou: ${reason}`);
   }
 
